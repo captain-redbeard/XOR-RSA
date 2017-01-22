@@ -18,9 +18,10 @@ import java.util.List;
 public class OAEP {
     private SecureRandom random = new SecureRandom();
     private byte[] separator;
+    public int hLen;
 
     public OAEP() {
-        this(null, null);
+        this(null, null, 64);
     }
 
     /**
@@ -29,7 +30,7 @@ public class OAEP {
      * @param random - secure random
      * @param separator - separator for message
      */
-    public OAEP(SecureRandom random, byte[] separator) {
+    public OAEP(SecureRandom random, byte[] separator, int hLen) {
         //Set secure random
         if (random != null) {
             this.random = random;
@@ -43,6 +44,13 @@ public class OAEP {
         } else {
             this.separator = new byte[]{0x01};
         }
+
+        //Custom hLen
+        if (hLen != 64) {
+            this.hLen = hLen;
+        } else {
+            this.hLen = 64;
+        }
     }
 
     /**
@@ -50,8 +58,6 @@ public class OAEP {
      * This method will loop over the add padding method
      * until we have a padded message that will not be
      * effected by converting to a BigInteger.
-     *
-     * NOTE: DOES NOT WORK WITH CRT.
      *
      * @param data - data to add padding to
      * @param keyLength - modulus length in bytes
@@ -87,15 +93,8 @@ public class OAEP {
      * @return byte[]
      */
     public byte[] addPadding(byte[] M, String L, int k) {
-        int hLen = 64;
         int mLen = M.length;
         byte[] DB;
-
-        //Label length check
-        if (L.length() > k - (2 * hLen) - 1 - separator.length) {
-            System.out.println("ERROR: label too long");
-            return null;
-        }
 
         //Message length check
         if (mLen > k - (2 * hLen) - 1 - separator.length) {
@@ -103,8 +102,14 @@ public class OAEP {
             return null;
         }
 
+        //Label length check
+        if (L.length() > k - (2 * hLen) - 1 - separator.length) {
+            System.out.println("ERROR: label too long");
+            return null;
+        }
+
         //lHash = HASH(L);
-        byte[] lHash = Digest.getDigest(L.getBytes(), null);
+        byte[] lHash = Digest.getDigest(L.getBytes(), null, hLen);
 
         //PS = k - mLen - 2hLen - 2
         byte[] PS = new byte[k - mLen - (2 * hLen) - 1 - separator.length];
@@ -142,7 +147,6 @@ public class OAEP {
         }
 
         //seedMask = MGF1(maskedDB, hLen)
-        //byte[] seedMask = MGF1.MGF1(DB, hLen);
         byte[] seedMask = MGF1(DB, hLen);
 
         //maskedSeed = seed XOR seedMask
@@ -183,18 +187,6 @@ public class OAEP {
      * @return byte[]
      */
     public byte[] removePadding(byte[] EM, String L, int k) {
-        int hLen = 64;
-
-        //Add truncated 0 back in, BigInteger removes it for some values.
-        int lPad = 1;
-        while (EM.length < k) {
-            byte[] tm = new byte[k];
-            tm[lPad - 1] = 0;
-            System.arraycopy(EM, 0, tm, lPad, EM.length);
-            EM = tm;
-            lPad++;
-        }
-
         //Separate EM into Y; maskedSeed length of hLen; maskedDB length of k - hLen - 1
         byte[] maskedSeed = new byte[hLen];
         byte[] maskedDB = new byte[k - hLen - 1];
@@ -216,11 +208,6 @@ public class OAEP {
         for (int i = 0; i < k - hLen - 1; i++) {
             maskedDB[i] ^= dbMask[i];
         }
-
-        //Separate DB into lHash length of hLen; PS; 0x01; M
-        /*byte[] lHash = Arrays.copyOfRange(maskedDB, 0, hLen);
-        byte[] PS = Arrays.copyOfRange(maskedDB, hLen, maskedDB.length - hLen);
-        byte[] M = tokens(maskedDB, new byte[]{0x01}).get(1);*/
 
         //Split to get actual message
         List<byte[]> splitByte = splitByteArray(maskedDB, separator);
@@ -244,8 +231,25 @@ public class OAEP {
             return null;
         }
 
+        //x = x xLen–1 256 xLen–1 + x xLen–2 256 xLen–2 + ... + x 1 256 + x 0
         for (int i = 0; i < xLen; i++) {
             temp[i] = x.divideAndRemainder(tfs.pow(xLen - i))[0].byteValue();
+        }
+
+        return temp;
+    }
+
+    /**
+     * @param x - octet string to be converted
+     * @return BigInteger
+     */
+    private static BigInteger OS2IP(byte[] x) {
+        BigInteger temp = new BigInteger("0");
+        BigInteger tfs = new BigInteger("256");
+
+        //x = x xLen–1 256 xLen–1 + x xLen–2 256 xLen–2 + ... + x 1 256 + x 0
+        for (int i = 0; i < x.length; i++) {
+            temp = temp.add(BigInteger.valueOf(0xFF & x[i - 1])).multiply(tfs.pow(x.length - i));
         }
 
         return temp;
@@ -258,25 +262,24 @@ public class OAEP {
      * @param maskLen - returned mask length
      * @return byte[]
      */
-    private static byte[] MGF1(byte[] mgfSeed, int maskLen) {
-        double hLen = 64;
+    private byte[] MGF1(byte[] mgfSeed, int maskLen) {
         ByteArrayOutputStream seedI2Stream = new ByteArrayOutputStream();
         ByteArrayOutputStream hashStream = new ByteArrayOutputStream();
 
         //Check mask length
-        if (maskLen > Math.pow(2, 32)) {
+        if (maskLen > Math.pow(2, hLen)) {
             System.out.println("ERROR: mask too long");
             return null;
         }
 
-        for (int i = 0; i < Math.ceil(maskLen / hLen); i++) {
-            //C = I2OSP(counter, 4)
+        for (int i = 0; i < Math.ceil(maskLen / hLen) - 1; i++) {
             try {
-                //hash(mgfSeed || C)
                 seedI2Stream = new ByteArrayOutputStream();
                 seedI2Stream.write(mgfSeed);
+                //C = I2OSP(counter, 4)
                 seedI2Stream.write(I2OSP(BigInteger.valueOf(i), 4));
-                hashStream.write(Digest.getDigest(seedI2Stream.toByteArray(), null));
+                //hash(mgfSeed || C)
+                hashStream.write(Digest.getDigest(seedI2Stream.toByteArray(), null, hLen));
 
                 seedI2Stream.flush();
                 seedI2Stream.close();
@@ -286,7 +289,7 @@ public class OAEP {
         }
 
         //T = T || Hash (mfgSeed || C)
-        byte[] mask = hashStream.toByteArray();
+        byte[] mask = Arrays.copyOfRange(hashStream.toByteArray(), 0, maskLen);
 
         try {
             seedI2Stream.flush();

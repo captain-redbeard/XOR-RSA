@@ -15,7 +15,7 @@ public class TestRSA {
     private static int failed;
 
     public static void main(String[] args) {
-        final int tests = 10;
+        final int tests = 1;
         final int subTests = 10;
         final boolean debug = true;
 
@@ -48,8 +48,6 @@ public class TestRSA {
             PublicKey publicKey = keypair.getPublicKey();
             PrivateKey privateKey = keypair.getPrivateKey();
 
-            System.out.println(publicKey.modulus);
-
             //Assign message
             String rawMessage = "Hello World! " +
                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ " +
@@ -59,7 +57,6 @@ public class TestRSA {
             BigInteger message = new BigInteger(rawMessage.getBytes());
 
             for (int i = 0; i < subTests; i++) {
-
                 //Encode
                 startEncode = System.currentTimeMillis();
                 BigInteger cipher = publicKey.encode(message);

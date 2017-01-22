@@ -15,7 +15,7 @@ public class TestOAEP {
 
     public static void main(String[] args) throws Exception {
         final int tests = 100;
-        final int subTests = 10;
+        final int subTests = 100;
         final boolean debug = true;
 
         for (int i = 0; i < tests; i++) {

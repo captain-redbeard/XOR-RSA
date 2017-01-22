@@ -10,42 +10,50 @@ import java.math.BigInteger;
  * @since 29/12/16
  */
 public class PrivateKey {
-    public BigInteger privateExponent;
     public BigInteger modulus;
+    public BigInteger publicExponent;
+    public BigInteger privateExponent;
     private BigInteger p;
     private BigInteger q;
     private BigInteger dp;
     private BigInteger dq;
     private BigInteger qinv;
+    private int keyLen;
     private OAEP oaep;
 
     /**
      * Construct a private key.
      *
-     * @param privateExponent - private exponent, commonly d
      * @param modulus - modulus p * q
+     * @param publicExponent - public exponent, e
+     * @param privateExponent - private exponent, d
      * @param p - first prime number
      * @param q - second prime number
      * @param dp - d mod p-1
      * @param dq - d mod q-1
-     * @param qinv q-1 mod p
+     * @param qinv inverse of q mod p
+     * @param oaep - OAEP object
      */
     public PrivateKey(
-            BigInteger privateExponent,
             BigInteger modulus,
+            BigInteger publicExponent,
+            BigInteger privateExponent,
             BigInteger p,
             BigInteger q,
             BigInteger dp,
             BigInteger dq,
-            BigInteger qinv) {
-        this.privateExponent = privateExponent;
+            BigInteger qinv,
+            OAEP oaep) {
         this.modulus = modulus;
+        this.publicExponent = publicExponent;
+        this.privateExponent = privateExponent;
         this.p = p;
         this.q = q;
         this.dp = dp;
         this.dq = dq;
         this.qinv = qinv;
-        this.oaep = new OAEP();
+        this.keyLen = (int) Math.ceil(modulus.bitLength() / 8);
+        this.oaep = oaep;
     }
 
     /**
@@ -58,10 +66,21 @@ public class PrivateKey {
     public BigInteger decode(BigInteger c) {
         return new BigInteger(
                 oaep.removePadding(
-                        decodeRaw(c).toByteArray(),
-                        256
+                        decodeCRT(c).toByteArray(),
+                        keyLen
                 )
         );
+    }
+
+    /**
+     * Sign a message to create a signature.
+     * Uses CRT.
+     *
+     * @param m - message to sign
+     * @return BigInteger
+     */
+    public BigInteger sign(BigInteger m) {
+        return signCRT(m);
     }
 
     /**
@@ -88,7 +107,7 @@ public class PrivateKey {
     public BigInteger decodeCRT(BigInteger c) {
         BigInteger m1 = c.modPow(dp, p);
         BigInteger m2 = c.modPow(dq, q);
-        BigInteger h = (m1.subtract(m2).multiply(qinv).mod(p));
+        BigInteger h = m1.subtract(m2).multiply(qinv).mod(p);
         BigInteger m = m2.add(q.multiply(h));
 
         return m;
@@ -100,10 +119,32 @@ public class PrivateKey {
      * @param m - message to sign
      * @return BigInteger
      */
-    public BigInteger sign(BigInteger m) {
+    public BigInteger signRaw(BigInteger m) {
         return decodeRaw(
                 new BigInteger(
-                        Digest.getDigest(m.toByteArray(), null)
+                        Digest.getDigest(
+                                m.toByteArray(),
+                                null,
+                                oaep.hLen
+                        )
+                )
+        );
+    }
+
+    /**
+     * Sign a message to create a signature using CRT.
+     *
+     * @param m - message to sign
+     * @return BigInteger
+     */
+    public BigInteger signCRT(BigInteger m) {
+        return decodeCRT(
+                new BigInteger(
+                        Digest.getDigest(
+                                m.toByteArray(),
+                                null,
+                                oaep.hLen
+                        )
                 )
         );
     }

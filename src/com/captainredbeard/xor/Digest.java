@@ -1,6 +1,7 @@
 package com.captainredbeard.xor;
 
 import java.security.MessageDigest;
+import java.util.Arrays;
 
 /**
  * @author captain-redbeard
@@ -14,9 +15,10 @@ public class Digest {
      *
      * @param m - data to get digest of
      * @param algorithm - algorithm to use, default SHA-512
+     * @param length - length of returned digest, must be less than or equal to max length
      * @return byte[]
      */
-    public static byte[] getDigest(byte[] m, String algorithm) {
+    public static byte[] getDigest(byte[] m, String algorithm, int length) {
         if(algorithm == null) {
             algorithm = "SHA-512";
         }
@@ -31,6 +33,6 @@ public class Digest {
             return new byte[0];
         }
 
-        return hash;
+        return Arrays.copyOfRange(hash, 0, length);
     }
 }

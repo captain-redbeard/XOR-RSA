@@ -42,7 +42,7 @@ public class RSA {
             this.e = new BigInteger("65537");
         }
 
-        this.oaep = new OAEP();
+        this.oaep = new OAEP(this.random, null, 64);
     }
 
     /**
@@ -105,9 +105,10 @@ public class RSA {
 
         BigInteger dp = d.mod(p.subtract(BigInteger.ONE));
         BigInteger dq = d.mod(q.subtract(BigInteger.ONE));
-        BigInteger qinv = q.subtract(BigInteger.ONE).mod(p);
+        BigInteger qinv = q.modInverse(p);
 
-        return new Keypair(e, d, n, p, q, dp, dq, qinv);
+        //Return keypair
+        return new Keypair(n, e, d, p, q, dp, dq, qinv, oaep);
     }
 
     /**
@@ -136,20 +137,22 @@ public class RSA {
      * Wrapper method to add padding.
      *
      * @param data - data to pad
+     * @param keyLen - key length
      * @return byte[]
      */
-    public byte[] addPadding(byte[] data) {
-        return oaep.addPadding(data, 256);
+    public byte[] addPadding(byte[] data, int keyLen) {
+        return oaep.addPadding(data, keyLen);
     }
 
     /**
      * Wrapper method to remove padding.
      *
      * @param data - data to remove padding from
+     * @param keyLen - key length
      * @return byte[]
      */
-    public byte[] removePadding(byte[] data) {
-        return oaep.removePadding(data, 256);
+    public byte[] removePadding(byte[] data, int keyLen) {
+        return oaep.removePadding(data, keyLen);
     }
 
 }

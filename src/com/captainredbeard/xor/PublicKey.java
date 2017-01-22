@@ -10,14 +10,23 @@ import java.math.BigInteger;
  * @since 29/12/16
  */
 public class PublicKey {
-    public BigInteger publicExponent;
     public BigInteger modulus;
+    public BigInteger publicExponent;
+    private int keyLen;
     private OAEP oaep;
 
-    public PublicKey(BigInteger publicExponent, BigInteger modulus) {
-        this.publicExponent = publicExponent;
+    /**
+     * Construct a public key.
+     *
+     * @param modulus - modulus p * q
+     * @param publicExponent - public exponent, e
+     * @param oaep - OAEP object
+     */
+    public PublicKey(BigInteger modulus, BigInteger publicExponent, OAEP oaep) {
         this.modulus = modulus;
-        this.oaep = new OAEP();
+        this.publicExponent = publicExponent;
+        this.keyLen = (int) Math.ceil(modulus.bitLength() / 8);
+        this.oaep = oaep;
     }
 
     /**
@@ -27,16 +36,14 @@ public class PublicKey {
      * @return BigInteger
      */
     public BigInteger encode(BigInteger m) {
-        BigInteger c = encodeRaw(
+        return encodeRaw(
                 new BigInteger(
                         oaep.addPadding(
                                 m.toByteArray(),
-                                256
+                                keyLen
                         )
                 )
         );
-
-        return c;
     }
 
     /**
@@ -67,7 +74,8 @@ public class PublicKey {
                 new BigInteger(
                         Digest.getDigest(
                                 m.toByteArray(),
-                                null
+                                null,
+                                oaep.hLen
                         )
                 )
         );
